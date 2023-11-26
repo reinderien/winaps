@@ -9,7 +9,40 @@ needed. Administrative mode is not needed. Any existing Wi-Fi connections will
 
 When run as a script, it offers much of the same content as the Linux `iw` and
 `iwlist` scan modes.
+
+When imported, the top-level structs and methods are reusable.
 """
+
+__all__ = (
+    'DOT11_BSS_TYPE',
+    'DOT11_MAC_ADDRESS',
+    'DOT11_PHY_TYPE',
+    'DOT11_SSID',
+    'GUID',
+    'WLAN_BSS_ENTRY',
+    'WLAN_BSS_LIST',
+    'WLAN_INTERFACE_INFO',
+    'WLAN_INTERFACE_INFO_LIST',
+    'WLAN_INTERFACE_STATE',
+    'WLAN_NOTIFICATION_ACM',
+    'WLAN_NOTIFICATION_CALLBACK',
+    'WLAN_NOTIFICATION_DATA',
+    'WLAN_NOTIFICATION_SOURCE',
+    'WLAN_RATE',
+    'WLAN_RATE_SET',
+    'WlanCloseHandle',
+    'WlanEnumInterfaces',
+    'WlanFreeMemory',
+    'WlanGetNetworkBssList',
+    'WlanOpenHandle',
+    'WlanRegisterNotification',
+    'WlanScan',
+    'acm_callback',
+    'check_win',
+    'format_hex',
+    'first_iface',
+    'listen_forever',
+)
 
 import ctypes.wintypes
 import datetime
