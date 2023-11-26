@@ -17,6 +17,7 @@ import struct
 import time
 import uuid
 from contextlib import contextmanager
+from decimal import Decimal
 from enum import Enum
 from typing import Any, Callable, Iterable, Iterator
 
@@ -264,7 +265,7 @@ class WLAN_BSS_ENTRY(ctypes.LittleEndianStructure):
         yield f'{prefix}RSSI: {self.lRssi} dBm'
         yield f'{prefix}Link quality: {self.uLinkQuality}%'
         yield f'{prefix}Country compliant or unavailable: {bool(self.bInRegDomain)}'
-        yield f'{prefix}Frequency: {self.ulChCenterFrequency*1e-6} GHz'
+        yield f'{prefix}Frequency: {Decimal(self.ulChCenterFrequency)/1_000_000} GHz'
         yield f'{prefix}Beacon period: {self.usBeaconPeriod} * 1.024 ms'
         yield f'{prefix}Caps: {", ".join(self.cap_strs())}'
         yield f'{prefix}Uptime: {self.uptime}'
