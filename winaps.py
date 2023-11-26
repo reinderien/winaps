@@ -1,6 +1,14 @@
 """
-This is a thin FFI for a subset of the Native Wi-Fi wlanapi; see
-https://learn.microsoft.com/en-us/windows/win32/api/_nwifi/
+This is a thin FFI for a subset of the
+[Native Wi-Fi wlanapi](https://learn.microsoft.com/en-us/windows/win32/api/_nwifi).
+
+The only dependencies are Python 3 and a version of Windows somewhere north of
+Vista (untested). Monitor mode is not needed. npcap and Wireshark are not
+needed. Administrative mode is not needed. Any existing Wi-Fi connections will
+(probably) not be interrupted.
+
+When run as a script, it offers much of the same content as the Linux `iw` and
+`iwlist` scan modes.
 """
 
 import ctypes.wintypes
