@@ -14,12 +14,12 @@ When run as a script, it offers much of the same content as the Linux `iw` and
 import ctypes.wintypes
 import datetime
 import struct
-import time
-import uuid
 from contextlib import contextmanager
 from decimal import Decimal
 from enum import Enum
+from time import sleep
 from typing import Any, Callable, Iterable, Iterator
+from uuid import UUID
 
 # https://docs.python.org/3/library/ctypes.html#ctypes-function-prototypes
 IN = 1
@@ -81,9 +81,9 @@ class GUID(ctypes.Structure):
     __slots__ = fslots(_fields_)
 
     @property
-    def uuid(self) -> uuid.UUID:
+    def uuid(self) -> UUID:
         node, = struct.unpack('>Q', b'\0\0' + bytes(self.Data4[2:]))
-        return uuid.UUID(
+        return UUID(
             fields=(
                 int(self.Data1),
                 int(self.Data2),
@@ -801,7 +801,7 @@ def listen_forever(period: float = 5) -> None:
         # Scans are mandated to take at most 4 seconds
         while True:
             WlanScan(client=client, interface=iface)
-            time.sleep(period)
+            sleep(period)
 
 
 if __name__ == '__main__':
