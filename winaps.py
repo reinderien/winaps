@@ -33,8 +33,8 @@ __all__ = (
     'WlanScan',
     'acm_callback',
     'check_win',
-    'format_hex',
     'first_iface',
+    'format_hex',
     'listen_forever',
 )
 
@@ -51,78 +51,18 @@ from uuid import UUID
 # https://docs.python.org/3/library/ctypes.html#ctypes-function-prototypes
 IN = 1
 OUT = 2
-DEFAULT_ZERO = 4
-
-# https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/shared/windot11.h#L48
-# https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/windot11/ns-windot11-_dot11_mac_address
-DOT11_MAC_ADDRESS = ctypes.c_ubyte * 6
+FORCE_ZERO = 4
 
 
-def fslots(fields: Iterable[
+def _fslots(fields: Iterable[
     tuple[str, Any] | tuple[str, Any, int]
 ]) -> tuple[str, ...]:
     return tuple(field[0] for field in fields)
 
 
-def check_win(result: ctypes.wintypes.DWORD) -> None:
-    result = int(result)
-    if result != 0:
-        raise ctypes.WinError(code=result)
-
-
-def format_hex(bytea) -> str:
-    return ':'.join(
-        f'{b:02x}' for b in bytes(bytea)
-    )
-
-
-def parse_ies(blob: bytes) -> Iterator[bytes]:
-    """
-    https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/ns-wlanapi-wlan_bss_entry
-
-    > Information elements are defined in the IEEE 802.11 specifications to have a common general
-    > format consisting of a 1-byte Element ID field, a 1-byte Length field, and a variable-length
-    > element-specific information field. Each information element is assigned a unique Element ID
-    > value as defined in this IEEE 802.11 standards. The Length field specifies the number of bytes
-    > in the information field.
-    """
-    offset = 0
-    while offset+1 < len(blob):
-        ie_len = blob[offset + 1]
-        next_offset = offset + 2 + ie_len
-        yield blob[offset: next_offset]
-        offset = next_offset
-
-
-class GUID(ctypes.Structure):
-    """
-    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/shared/guiddef.h#L15
-    https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid
-    """
-    _fields_ = (
-        ('Data1', ctypes.c_ulong),
-        ('Data2', ctypes.c_ushort),
-        ('Data3', ctypes.c_ushort),
-        ('Data4', ctypes.c_ubyte*8),
-    )
-    __slots__ = fslots(_fields_)
-
-    @property
-    def uuid(self) -> UUID:
-        node, = struct.unpack('>Q', b'\0\0' + bytes(self.Data4[2:]))
-        return UUID(
-            fields=(
-                int(self.Data1),
-                int(self.Data2),
-                int(self.Data3),
-                int(self.Data4[0]),
-                int(self.Data4[1]),
-                node,
-            ),
-        )
-
-    def __str__(self) -> str:
-        return str(self.uuid)
+# https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/shared/windot11.h#L48
+# https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/windot11/ns-windot11-_dot11_mac_address
+DOT11_MAC_ADDRESS = ctypes.c_ubyte * 6
 
 
 class DOT11_BSS_TYPE(Enum):
@@ -133,22 +73,6 @@ class DOT11_BSS_TYPE(Enum):
     infrastructure = 1
     independent = 2
     any = 3
-
-
-class DOT11_SSID(ctypes.Structure):
-    """
-    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/shared/wlantypes.h#L30
-    https://learn.microsoft.com/en-us/windows/win32/nativewifi/dot11-ssid
-    """
-
-    # https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/shared/wlantypes.h#L29
-    DOT11_SSID_MAX_LENGTH = 32
-
-    _fields_ = (
-        ('uSSIDLength', ctypes.c_ulong),
-        ('ucSSID', ctypes.c_char * DOT11_SSID_MAX_LENGTH),
-    )
-    __slots__ = fslots(_fields_)
 
 
 class DOT11_PHY_TYPE(Enum):
@@ -173,6 +97,53 @@ class DOT11_PHY_TYPE(Enum):
     IHV_end = 0xffffffff
 
 
+class DOT11_SSID(ctypes.Structure):
+    """
+    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/shared/wlantypes.h#L30
+    https://learn.microsoft.com/en-us/windows/win32/nativewifi/dot11-ssid
+    """
+
+    # https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/shared/wlantypes.h#L29
+    DOT11_SSID_MAX_LENGTH = 32
+
+    _fields_ = (
+        ('uSSIDLength', ctypes.c_ulong),
+        ('ucSSID', ctypes.c_char * DOT11_SSID_MAX_LENGTH),
+    )
+    __slots__ = _fslots(_fields_)
+
+
+class GUID(ctypes.Structure):
+    """
+    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/shared/guiddef.h#L15
+    https://learn.microsoft.com/en-us/windows/win32/api/guiddef/ns-guiddef-guid
+    """
+    _fields_ = (
+        ('Data1', ctypes.c_ulong),
+        ('Data2', ctypes.c_ushort),
+        ('Data3', ctypes.c_ushort),
+        ('Data4', ctypes.c_ubyte*8),
+    )
+    __slots__ = _fslots(_fields_)
+
+    @property
+    def uuid(self) -> UUID:
+        node, = struct.unpack('>Q', b'\0\0' + bytes(self.Data4[2:]))
+        return UUID(
+            fields=(
+                int(self.Data1),
+                int(self.Data2),
+                int(self.Data3),
+                int(self.Data4[0]),
+                int(self.Data4[1]),
+                node,
+            ),
+        )
+
+    def __str__(self) -> str:
+        return str(self.uuid)
+
+
 class WLAN_RATE(ctypes.LittleEndianStructure):
     """
     https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/ns-wlanapi-wlan_rate_set
@@ -182,7 +153,7 @@ class WLAN_RATE(ctypes.LittleEndianStructure):
         ('rate', ctypes.wintypes.USHORT, 15),
         ('isBasic', ctypes.wintypes.USHORT, 1),
     )
-    __slots__ = fslots(_fields_)
+    __slots__ = _fslots(_fields_)
 
     @property
     def mbps(self) -> float:
@@ -209,7 +180,7 @@ class WLAN_RATE_SET(ctypes.Structure):
         ('uRateSetLength', ctypes.wintypes.ULONG),
         ('usRateSet', WLAN_RATE * DOT11_RATE_SET_MAX_LENGTH),
     )
-    __slots__ = fslots(_fields_)
+    __slots__ = _fslots(_fields_)
 
     @property
     def items(self) -> ctypes.Array[WLAN_RATE]:
@@ -249,7 +220,7 @@ class WLAN_BSS_ENTRY(ctypes.LittleEndianStructure):
         ('ulIeOffset', ctypes.wintypes.ULONG),
         ('ulIeSize', ctypes.wintypes.ULONG),
     )
-    __slots__ = fslots(_fields_)
+    __slots__ = _fslots(_fields_)
 
     @property
     def ie_blob(self) -> ctypes.Array[ctypes.c_ubyte]:
@@ -324,7 +295,7 @@ class WLAN_BSS_LIST(ctypes.Structure):
         ('dwNumberOfItems', ctypes.wintypes.DWORD),
         ('wlanBssEntries', WLAN_BSS_ENTRY * 1),
     )
-    __slots__ = fslots(_fields_)
+    __slots__ = _fslots(_fields_)
 
     @property
     def items(self) -> ctypes.Array[WLAN_BSS_ENTRY]:
@@ -364,7 +335,7 @@ class WLAN_INTERFACE_INFO(ctypes.Structure):
         ('strInterfaceDescription', ctypes.c_wchar * WLAN_MAX_NAME_LENGTH),
         ('isState', ctypes.c_int),  # WLAN_INTERFACE_STATE
     )
-    __slots__ = fslots(_fields_)
+    __slots__ = _fslots(_fields_)
 
     @property
     def state(self) -> WLAN_INTERFACE_STATE:
@@ -388,33 +359,12 @@ class WLAN_INTERFACE_INFO_LIST(ctypes.Structure):
         ('dwIndex', ctypes.wintypes.DWORD),
         ('InterfaceInfo', WLAN_INTERFACE_INFO*1),
     )
-    __slots__ = fslots(_fields_)
+    __slots__ = _fslots(_fields_)
 
     @property
     def items(self) -> ctypes.Array[WLAN_INTERFACE_INFO]:
         tnew = WLAN_INTERFACE_INFO * self.dwNumberOfItems
         return tnew.from_address(ctypes.addressof(self.InterfaceInfo))
-
-
-class WLAN_NOTIFICATION_SOURCE(Enum):
-    """
-    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/um/wlanapi.h#L847
-    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/um/l2cmn.h#L40
-    https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/nf-wlanapi-wlanregisternotification#parameters
-    """
-    NONE             = 0
-    DOT3_AUTO_CONFIG = 0X00000001
-    SECURITY         = 0X00000002
-    ONEX             = 0X00000004
-    WLAN_ACM         = 0X00000008
-    WLAN_MSM         = 0X00000010
-    WLAN_SECURITY    = 0X00000020
-    WLAN_IHV         = 0X00000040
-    WLAN_HNWK        = 0X00000080
-    WCM              = 0X00000100
-    WCM_CSP          = 0X00000200
-    WFD              = 0X00000400
-    ALL              = 0X0000FFFF
 
 
 class WLAN_NOTIFICATION_ACM(Enum):
@@ -453,6 +403,27 @@ class WLAN_NOTIFICATION_ACM(Enum):
     end                        = 28
 
 
+class WLAN_NOTIFICATION_SOURCE(Enum):
+    """
+    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/um/wlanapi.h#L847
+    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/um/l2cmn.h#L40
+    https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/nf-wlanapi-wlanregisternotification#parameters
+    """
+    NONE             = 0
+    DOT3_AUTO_CONFIG = 0X00000001
+    SECURITY         = 0X00000002
+    ONEX             = 0X00000004
+    WLAN_ACM         = 0X00000008
+    WLAN_MSM         = 0X00000010
+    WLAN_SECURITY    = 0X00000020
+    WLAN_IHV         = 0X00000040
+    WLAN_HNWK        = 0X00000080
+    WCM              = 0X00000100
+    WCM_CSP          = 0X00000200
+    WFD              = 0X00000400
+    ALL              = 0X0000FFFF
+
+
 class WLAN_NOTIFICATION_DATA(ctypes.Structure):
     """
     https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/um/wlanapi.h#L934
@@ -466,7 +437,7 @@ class WLAN_NOTIFICATION_DATA(ctypes.Structure):
         ('dwDataSize', ctypes.wintypes.DWORD),
         ('pData', ctypes.wintypes.LPVOID),
     )
-    __slots__ = fslots(_fields_)
+    __slots__ = _fslots(_fields_)
 
     @property
     def source(self) -> WLAN_NOTIFICATION_SOURCE:
@@ -486,73 +457,6 @@ WLAN_NOTIFICATION_CALLBACK = ctypes.WINFUNCTYPE(
 )
 
 
-class WlanFreeMemoryT:
-    """
-    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/um/wlanapi.h#L1483
-    https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/nf-wlanapi-wlanfreememory
-    """
-    __slots__ = 'fun',
-
-    def __init__(self) -> None:
-        proto = ctypes.WINFUNCTYPE(
-            None,
-            ctypes.wintypes.LPVOID,
-        )
-        self.fun = proto(
-            ('WlanFreeMemory', wlanapi),
-            (
-                (IN, 'pMemory'),
-            ),
-        )
-
-    def __call__(self, memory: ctypes.wintypes.LPVOID) -> None:
-        self.fun(pMemory=memory)
-
-
-class WlanOpenHandleT:
-    """
-    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/um/wlanapi.h#L1159
-    https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/nf-wlanapi-wlanopenhandle
-    """
-    __slots__ = 'fun',
-
-    def __init__(self) -> None:
-        proto = ctypes.WINFUNCTYPE(
-            ctypes.wintypes.DWORD,
-            ctypes.wintypes.DWORD,
-            ctypes.wintypes.LPVOID,
-            ctypes.wintypes.PDWORD,
-            ctypes.wintypes.PHANDLE,
-        )
-        self.fun = proto(
-            ('WlanOpenHandle', wlanapi),
-            (
-                (IN, 'dwClientVersion'),
-                (IN | DEFAULT_ZERO, 'pReserved'),
-                (OUT, 'pdwNegotiatedVersion'),
-                (OUT, 'phClientHandle'),
-            ),
-        )
-        self.fun.errcheck = self.check
-
-    @staticmethod
-    def check(
-        result: ctypes.wintypes.DWORD, func: Callable, args: tuple,
-    ) -> tuple[ctypes.wintypes.PDWORD, ctypes.wintypes.PHANDLE]:
-        check_win(result)
-        return args[2:]
-
-    @contextmanager
-    def __call__(self, version: int = 2) -> Iterator[tuple[
-        int, ctypes.wintypes.HANDLE,
-    ]]:
-        pdwNegotiatedVersion, phClientHandle = self.fun(dwClientVersion=version)
-        try:
-            yield int(pdwNegotiatedVersion.value), phClientHandle.value
-        finally:
-            WlanCloseHandle(phClientHandle.value)
-
-
 class WlanCloseHandleT:
     """
     https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/um/wlanapi.h#L1167
@@ -570,7 +474,7 @@ class WlanCloseHandleT:
             ('WlanCloseHandle', wlanapi),
             (
                 (IN, 'hClientHandle'),
-                (IN | DEFAULT_ZERO, 'pReserved'),
+                (IN | FORCE_ZERO, 'pReserved'),
             ),
         )
 
@@ -597,7 +501,7 @@ class WlanEnumInterfacesT:
             ('WlanEnumInterfaces', wlanapi),
             (
                 (IN, 'hClientHandle'),
-                (IN | DEFAULT_ZERO, 'pReserved'),
+                (IN | FORCE_ZERO, 'pReserved'),
                 (OUT, 'ppInterfaceList'),
             ),
         )
@@ -619,6 +523,132 @@ class WlanEnumInterfacesT:
             yield ifaces.contents.items
         finally:
             WlanFreeMemory(ifaces)
+
+
+class WlanFreeMemoryT:
+    """
+    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/um/wlanapi.h#L1483
+    https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/nf-wlanapi-wlanfreememory
+    """
+    __slots__ = 'fun',
+
+    def __init__(self) -> None:
+        proto = ctypes.WINFUNCTYPE(
+            None,
+            ctypes.wintypes.LPVOID,
+        )
+        self.fun = proto(
+            ('WlanFreeMemory', wlanapi),
+            (
+                (IN, 'pMemory'),
+            ),
+        )
+
+    def __call__(self, memory: ctypes.wintypes.LPVOID) -> None:
+        self.fun(pMemory=memory)
+
+
+class WlanGetNetworkBssListT:
+    """
+    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/um/wlanapi.h#L1267
+    https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/nf-wlanapi-wlangetnetworkbsslist
+    """
+    __slots__ = 'fun',
+
+    def __init__(self) -> None:
+        proto = ctypes.WINFUNCTYPE(
+            ctypes.wintypes.DWORD,
+            ctypes.wintypes.HANDLE,
+            ctypes.POINTER(GUID),
+            ctypes.POINTER(DOT11_SSID),
+            ctypes.c_int,  # DOT11_BSS_TYPE
+            ctypes.wintypes.BOOL,
+            ctypes.wintypes.LPVOID,
+            ctypes.POINTER(ctypes.POINTER(WLAN_BSS_LIST)),
+        )
+        self.fun = proto(
+            ('WlanGetNetworkBssList', wlanapi),
+            (
+                (IN, 'hClientHandle'),
+                (IN, 'pInterfaceGuid'),
+                (IN, 'pDot11Ssid', None),
+                (IN, 'dot11BssType'),
+                (IN, 'bSecurityEnabled'),
+                (IN | FORCE_ZERO, 'pReserved'),
+                (OUT, 'ppWlanBssList'),
+            ),
+        )
+        self.fun.errcheck = self.check
+
+    @staticmethod
+    def check(
+        result: ctypes.wintypes.DWORD, func: Callable, args: tuple,
+    ) -> ctypes.POINTER(ctypes.POINTER(WLAN_BSS_LIST)):
+        check_win(result)
+        return args[-1]
+
+    @contextmanager
+    def __call__(
+        self,
+        client: ctypes.wintypes.HANDLE,
+        interface: GUID,
+        dot11BssType: DOT11_BSS_TYPE = DOT11_BSS_TYPE.any,
+        bSecurityEnabled: bool = False,
+    ) -> Iterator[ctypes.Array[WLAN_BSS_ENTRY]]:
+        stations = self.fun(
+            hClientHandle=client,
+            pInterfaceGuid=ctypes.pointer(interface),
+            dot11BssType=dot11BssType.value,
+            bSecurityEnabled=bSecurityEnabled,
+        )
+        try:
+            yield stations.contents.items
+        finally:
+            WlanFreeMemory(stations)
+
+
+class WlanOpenHandleT:
+    """
+    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/um/wlanapi.h#L1159
+    https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/nf-wlanapi-wlanopenhandle
+    """
+    __slots__ = 'fun',
+
+    def __init__(self) -> None:
+        proto = ctypes.WINFUNCTYPE(
+            ctypes.wintypes.DWORD,
+            ctypes.wintypes.DWORD,
+            ctypes.wintypes.LPVOID,
+            ctypes.wintypes.PDWORD,
+            ctypes.wintypes.PHANDLE,
+        )
+        self.fun = proto(
+            ('WlanOpenHandle', wlanapi),
+            (
+                (IN, 'dwClientVersion'),
+                (IN | FORCE_ZERO, 'pReserved'),
+                (OUT, 'pdwNegotiatedVersion'),
+                (OUT, 'phClientHandle'),
+            ),
+        )
+        self.fun.errcheck = self.check
+
+    @staticmethod
+    def check(
+        result: ctypes.wintypes.DWORD, func: Callable, args: tuple,
+    ) -> tuple[ctypes.wintypes.PDWORD, ctypes.wintypes.PHANDLE]:
+        check_win(result)
+        return args[2:]
+
+    @contextmanager
+    def __call__(self, version: int = 2) -> Iterator[tuple[
+        int, ctypes.wintypes.HANDLE,
+    ]]:
+        pdwNegotiatedVersion, phClientHandle = self.fun(dwClientVersion=version)
+        try:
+            yield int(pdwNegotiatedVersion.value), phClientHandle.value
+        finally:
+            WlanCloseHandle(phClientHandle.value)
 
 
 class WlanRegisterNotificationT:
@@ -647,7 +677,7 @@ class WlanRegisterNotificationT:
                 (IN, 'bIgnoreDuplicate'),
                 (IN, 'funcCallback', None),
                 (IN, 'pCallbackContext', None),
-                (IN | DEFAULT_ZERO, 'pReserved'),
+                (IN | FORCE_ZERO, 'pReserved'),
                 (OUT, 'pdwPrevNotifSource'),
             ),
         )
@@ -693,7 +723,7 @@ class WlanScanT:
                 (IN, 'pInterfaceGuid'),
                 (IN, 'pDot11Ssid', None),
                 (IN, 'pIeData', None),
-                (IN | DEFAULT_ZERO, 'pReserved'),
+                (IN | FORCE_ZERO, 'pReserved'),
             ),
         )
 
@@ -707,65 +737,6 @@ class WlanScanT:
             pInterfaceGuid=ctypes.pointer(interface),
         )
         check_win(result)
-
-
-class WlanGetNetworkBssListT:
-    """
-    https://github.com/tpn/winsdk-10/blob/master/Include/10.0.16299.0/um/wlanapi.h#L1267
-    https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/nf-wlanapi-wlangetnetworkbsslist
-    """
-    __slots__ = 'fun',
-
-    def __init__(self) -> None:
-        proto = ctypes.WINFUNCTYPE(
-            ctypes.wintypes.DWORD,
-            ctypes.wintypes.HANDLE,
-            ctypes.POINTER(GUID),
-            ctypes.POINTER(DOT11_SSID),
-            ctypes.c_int,  # DOT11_BSS_TYPE
-            ctypes.wintypes.BOOL,
-            ctypes.wintypes.LPVOID,
-            ctypes.POINTER(ctypes.POINTER(WLAN_BSS_LIST)),
-        )
-        self.fun = proto(
-            ('WlanGetNetworkBssList', wlanapi),
-            (
-                (IN, 'hClientHandle'),
-                (IN, 'pInterfaceGuid'),
-                (IN, 'pDot11Ssid', None),
-                (IN, 'dot11BssType'),
-                (IN, 'bSecurityEnabled'),
-                (IN | DEFAULT_ZERO, 'pReserved'),
-                (OUT, 'ppWlanBssList'),
-            ),
-        )
-        self.fun.errcheck = self.check
-
-    @staticmethod
-    def check(
-        result: ctypes.wintypes.DWORD, func: Callable, args: tuple,
-    ) -> ctypes.POINTER(ctypes.POINTER(WLAN_BSS_LIST)):
-        check_win(result)
-        return args[-1]
-
-    @contextmanager
-    def __call__(
-        self,
-        client: ctypes.wintypes.HANDLE,
-        interface: GUID,
-        dot11BssType: DOT11_BSS_TYPE = DOT11_BSS_TYPE.any,
-        bSecurityEnabled: bool = False,
-    ) -> Iterator[ctypes.Array[WLAN_BSS_ENTRY]]:
-        stations = self.fun(
-            hClientHandle=client,
-            pInterfaceGuid=ctypes.pointer(interface),
-            dot11BssType=dot11BssType.value,
-            bSecurityEnabled=bSecurityEnabled,
-        )
-        try:
-            yield stations.contents.items
-        finally:
-            WlanFreeMemory(stations)
 
 
 wlanapi = ctypes.windll.LoadLibrary('wlanapi')
@@ -802,12 +773,24 @@ def acm_callback(
     print()
 
 
+def check_win(result: ctypes.wintypes.DWORD) -> None:
+    result = int(result)
+    if result != 0:
+        raise ctypes.WinError(code=result)
+
+
 def first_iface(client: ctypes.wintypes.HANDLE) -> GUID:
     with WlanEnumInterfaces(client=client) as ifaces:
         print(f'Interfaces found: {len(ifaces)}')
         iface = ifaces[0]
         print(f'Using {iface.summary}')
         return GUID.from_buffer_copy(iface.InterfaceGuid)
+
+
+def format_hex(bytea) -> str:
+    return ':'.join(
+        f'{b:02x}' for b in bytes(bytea)
+    )
 
 
 def listen_forever(period: float = 5) -> None:
@@ -829,6 +812,24 @@ def listen_forever(period: float = 5) -> None:
         while True:
             WlanScan(client=client, interface=iface)
             sleep(period)
+
+
+def parse_ies(blob: bytes) -> Iterator[bytes]:
+    """
+    https://learn.microsoft.com/en-us/windows/win32/api/wlanapi/ns-wlanapi-wlan_bss_entry
+
+    > Information elements are defined in the IEEE 802.11 specifications to have a common general
+    > format consisting of a 1-byte Element ID field, a 1-byte Length field, and a variable-length
+    > element-specific information field. Each information element is assigned a unique Element ID
+    > value as defined in this IEEE 802.11 standards. The Length field specifies the number of bytes
+    > in the information field.
+    """
+    offset = 0
+    while offset+1 < len(blob):
+        ie_len = blob[offset + 1]
+        next_offset = offset + 2 + ie_len
+        yield blob[offset: next_offset]
+        offset = next_offset
 
 
 if __name__ == '__main__':
