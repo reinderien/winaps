@@ -183,9 +183,8 @@ class WLAN_RATE_SET(ctypes.Structure):
     __slots__ = _fslots(_fields_)
 
     @property
-    def items(self) -> ctypes.Array[WLAN_RATE]:
-        tnew = WLAN_RATE * (self.uRateSetLength // ctypes.sizeof(WLAN_RATE))
-        return tnew.from_address(ctypes.addressof(self.usRateSet))
+    def items(self) -> list[WLAN_RATE]:
+        return self.usRateSet[:self.uRateSetLength // ctypes.sizeof(WLAN_RATE)]
 
     def describe(self, prefix: str = '    Rate: ') -> Iterator[str]:
         for rate in self.items:
